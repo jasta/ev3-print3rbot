@@ -6,6 +6,21 @@ from ev3dev import *
 
 from svg.parser import parse_path
 from svg.path import Path, Line, Arc, CubicBezier, QuadraticBezier
+
+class simple_touch:
+	def __init__(self, sensor):
+		self.sensor = sensor
+
+class simple_touch_color(simple_touch):
+    def value(self):
+		if self.sensor.value() > 25:
+			return 1
+		else:
+			return 0
+
+class simple_touch_actual(simple_touch):
+	def value(self):
+		return self.sensor.value()
         
 class mymotor(motor):
     def stop(self, stop_command='coast'):
@@ -70,8 +85,8 @@ class Writer():
         self.mot_B    = mymotor(OUTPUT_C)
         self.mot_lift = mymotor(OUTPUT_B)
 
-        self.touch_A  = touch_sensor(INPUT_3)
-        self.touch_B  = touch_sensor(INPUT_2)
+        self.touch_A  = simple_touch_color(color_sensor(INPUT_1))
+        self.touch_B  = simple_touch_actual(touch_sensor(INPUT_2))
         
         if (calibrate):
             self.calibrate()
@@ -86,6 +101,10 @@ class Writer():
         time.sleep(0.1)
 
     def calibrate (self):
+        self.calibrate_lift()
+        self.calibrate_arms()
+        
+    def calibrate_lift(self):
         self.mot_lift.rotate_forever(speed=-50, regulate='off')
         time.sleep(0.5)
         while(abs(self.mot_lift.speed) > 5):
@@ -98,9 +117,10 @@ class Writer():
         time.sleep(0.1)
         self.mot_lift.reset_position()
         time.sleep(1)
-        
+
         self.pen_up()
-        
+
+    def calibrate_arms(self):
         self.mot_A.reset_position()
         self.mot_B.reset_position()
 
@@ -133,21 +153,22 @@ class Writer():
         time.sleep(1)
         self.mot_A.reset_position()
         self.mot_B.reset_position()
-        self.mot_A.goto_position(-200, speed=400, regulate='on', stop_command='hold', wait=0)
+		# Mechanical TODO: color sensor arm pushes back too far...
+        #self.mot_A.goto_position(-200, speed=400, regulate='on', stop_command='hold', wait=0)
         self.mot_B.goto_position(200, speed=400, regulate='on', stop_command='hold', wait=1)
         time.sleep(1)
         self.mot_A.stop()
         self.mot_B.stop()
         self.mot_A.reset_position()
         self.mot_B.reset_position()
-        
+
     # All coordinates are in Lego distance (1 = distance between two holes center)
     # Coordinates of gear centre A
     xA, yA = 0.,0.
     # Coordinates of gear centre B
     xB, yB = 6.,0.
     # Length between articulation and pen
-    r1 = 16.+1.3125
+    r1 = 14.
     # Length between gear centre and articulation
     r2 = 11.
 
@@ -206,6 +227,7 @@ class Writer():
             #-2970 = 90
             return ((angle-14.) * 2970. / (90.-14.))
         (alpha, beta) = Writer.coordinates_to_angles (x, y)
+        print('coordinates_to_angles(%f,%f)=(%f,%f)' % (x, y, alpha, beta))
         return angle_to_pos (alpha), -angle_to_pos (beta)
 
     ## Converts angles of arms to coordinates.
@@ -220,7 +242,10 @@ class Writer():
             xE = xE2
             yE = yE2
         return xE, yE
-    
+
+    def get_coords(self):
+        return Writer.motorpos_to_coordinates(self.mot_B.position, self.mot_A.position)
+
     ## Converts motor position to coordinates
     @staticmethod
     def motorpos_to_coordinates (pos1, pos2):
@@ -256,8 +281,11 @@ class Writer():
 
         nextx = myx + (x - myx) / (dist * 100.)
         nexty = myy + (y - myy) / (dist * 100.)
+
+        print('given=(%f,%f); next=(%f,%f)' % (x, y, nextx, nexty))
         
         next_posB, next_posA = Writer.coordinates_to_motorpos (nextx, nexty)
+        print('next_pos=(%f,%f)' % (next_posB, next_posA))
         
         speed = max_speed
         slow_down_dist = (max_speed / 50.)
@@ -408,10 +436,16 @@ class Writer():
                     self.mot_A.stop()
                     self.mot_B.stop()
     
-wri = Writer(calibrate = True)
-
-wri.pen_up()
-wri.draw_image(image_file = 'images/test.svg',max_speed=50)
-#wri.follow_mouse()
-wri.pen_up()
-
+if __name__ == "__main__":
+    wri = Writer(calibrate = False)
+    
+    wri.pen_up()
+    time.sleep(2)
+    wri.pen_down()
+    time.sleep(2)
+    
+    #wri.pen_up()
+    #wri.draw_image(image_file = 'images/test.svg',max_speed=50)
+    #wri.follow_mouse()
+    #wri.pen_up()
+    
